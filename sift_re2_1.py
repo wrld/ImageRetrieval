@@ -248,12 +248,12 @@ sift_det = cv2.xfeatures2d.SIFT_create()
 training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
 training_names = os.listdir(training_path)
 
-# centres, des_list, response, all_class, addr_list = getClusterCentures(
-#     img_paths=training_path, num_words=num_words, dataset_matrix=None)
-# # test
-# img_features = get_all_features(des_list=des_list,
-#                                 num_words=num_words,
-#                                 response=response)
+centres, des_list, response, all_class, addr_list = getClusterCentures(
+    img_paths=training_path, num_words=num_words, dataset_matrix=None)
+# test
+img_features = get_all_features(des_list=des_list,
+                                num_words=num_words,
+                                response=response)
 
 path = '/home/gjx/visual-struct/dataset/train/car/car19.jpg'
 
