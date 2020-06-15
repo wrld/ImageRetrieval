@@ -5,8 +5,10 @@ import numpy as np
 import os
 from sklearn.cluster import KMeans
 from matplotlib import pyplot as plt
-from sklearn.decomposition import PCA           #加载PCA算法包
+from sklearn.decomposition import PCA  #加载PCA算法包
 from sklearn.datasets import load_iris
+from sklearn.neighbors import NearestNeighbors
+
 
 def getClusterCentures(img_paths, dataset_matrix, num_words):
     '''
@@ -19,7 +21,7 @@ def getClusterCentures(img_paths, dataset_matrix, num_words):
     all_class = []
     des_list = []  # 特征描述
     addr_list = []
-    des_matrix = np.zeros((1, 128))
+    des_matrix = np.zeros((1, 32))
     response = np.float32([])
     sumcount = 0
     # if img_paths != None:
@@ -32,8 +34,16 @@ def getClusterCentures(img_paths, dataset_matrix, num_words):
         for path in file_paths:
             # print(path)
             img = cv2.imread(img_paths + allname[i] + "/" + path)
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            kp, des = sift_det.detectAndCompute(img, None)
+            # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            # kp, des = sift_det.detectAndCompute(img, None)
+            # Initiate STAR detector
+            orb = cv2.ORB_create()
+
+            # find the keypoints with ORB
+            # kp = orb.detect(img, None)
+
+            # compute the descriptors with ORB
+            kp, des = orb.detectAndCompute(img, None)
             # print(des.shape)
             # des = calcSiftFeature(img)
             if des.any() != None:
@@ -68,7 +78,7 @@ def getClusterCentures(img_paths, dataset_matrix, num_words):
     response = response.reshape(-1, 1)
     response = response.astype(int)
     filename = "allfeature.npy"
-    np.save(filename, (centers, all_class, addr_list))
+    np.save(filename, (response, centers, all_class, addr_list))
     # print(response)
     return centers, des_list, response, all_class, addr_list
 
@@ -90,7 +100,7 @@ def des2feature(des, num_words, centures):
     '''
     img_feature_vec = np.zeros((1, num_words), 'float32')
     for i in range(des.shape[0]):
-        feature_k_rows = np.ones((num_words, 128), 'float32')
+        feature_k_rows = np.ones((num_words, 32), 'float32')
         # print(feature_k_rows.shape)
         feature = des[i]
         # print("1")
@@ -111,7 +121,7 @@ def des2feature(des, num_words, centures):
 def get_all_features(des_list, num_words, response):
     # 获取所有图片的特征向量
     filename = "allfeature.npy"
-    centers, all_class, addr_list = np.load(filename)
+    response, centers, all_class, addr_list = np.load(filename)
     allvec = np.zeros((len(des_list), num_words), 'float32')
     for i in range(len(des_list)):
         if des_list[i].all() != None:
@@ -123,8 +133,9 @@ def get_all_features(des_list, num_words, response):
     svm.train(np.array(allvec), cv2.ml.ROW_SAMPLE,
               np.array(response))  #None, None, None)  # select best params
     svm.save("svmnew.clf")
+
     filename = "allfeature.npy"
-    np.save(filename, (centers, allvec, all_class, addr_list))
+    np.save(filename, (response, centers, allvec, all_class, addr_list))
     return allvec
 
 
@@ -152,27 +163,25 @@ def getNearestImg(feature, dataset, num_close):
     return dist_index[:num_close]
 
 
-def showImg(target_img_path, index, dataset_paths, name):
+def showImg(target_img_path, index):
     '''
     target_img:要搜索的图像
     dataset_paths：图像数据库所有图片的路径
     显示最相似的图片集合
     '''
     # get img path
+    filename = "allfeature.npy"
+    response, centers, img_dataset, all_class, addr_list = np.load(filename)
     paths = []
-    print(index)
-    count = 0
-    file_paths = os.listdir(dataset_paths)
-    for path in file_paths:
-        if count < index:
-            paths.append(dataset_paths + path)
-            count += 1
-
+    for i in index[0]:
+        paths.append(addr_list[i])
+        print(i)
+    print(paths)
     plt.figure(figsize=(10, 20))  #  figsize 用来设置图片大小
     plt.subplot(432), plt.imshow(
         plt.imread(target_img_path)), plt.title('target_image')
 
-    for i in range(index):
+    for i in range(len(index[0])):
         plt.subplot(4, 3, i + 4), plt.imshow(plt.imread(paths[i]))
     plt.show()
 
@@ -185,7 +194,7 @@ def showImg_kmeans(target_img_path, index, class_index):
     '''
     # get img path
     filename = "allfeature.npy"
-    centers, img_dataset, all_class, addr_list = np.load(filename)
+    response, centers, img_dataset, all_class, addr_list = np.load(filename)
     paths = []
     if class_index > 0:
         for i in index:
@@ -213,11 +222,15 @@ def retrieval_img(img_path, img_paths):
     img_paths:图像数据库所有图像路径
     '''
     filename = "allfeature.npy"
-    centers, img_dataset, all_class, addr_list = np.load(filename)
-    num_close = 9
+    response, centers, img_dataset, all_class, addr_list = np.load(filename)
+    num_close = 6
     img = cv2.imread(img_path)
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    kp, des = sift_det.detectAndCompute(img, None)
+    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # kp, des = sift_det.detectAndCompute(img, None)
+    orb = cv2.ORB_create()
+
+    kp, des = orb.detectAndCompute(img, None)
+
     feature = des2feature(des=des, centures=centers, num_words=num_words)
 
     case = np.float32(feature)
@@ -225,7 +238,15 @@ def retrieval_img(img_path, img_paths):
     svm = cv2.ml.SVM_load("svmnew.clf")
     res = svm.predict(case)
     print(res[1][0][0])
-    result_index = int(res[1][0][0])
+    from sklearn.svm import SVC
+    classifier = SVC(C=16)
+
+    classifier.fit(np.array(img_dataset), np.array(response))
+    y_pred = classifier.predict(case)
+    print(classifier.score(img_dataset, response))
+    from sklearn.metrics import classification_report
+    print(allname[y_pred[0]])
+    result_index = y_pred[0]
     if result_index > 0:
         sorted_index = getNearestImg(
             feature,
@@ -235,15 +256,58 @@ def retrieval_img(img_path, img_paths):
         sorted_index = getNearestImg(feature, img_dataset[0:all_class[0]],
                                      num_close)
     showImg_kmeans(img_path, sorted_index, result_index)
+
+
     # showImg(img_path, num_close, img_paths + allname[int(res[1][0][0])] + "/",
     #         allname[int(res[1][0][0])])
+def getNearestImg_global(feature, dataset, num_close):
+    '''
+    找出目标图像最像的几个
+    feature:目标图像特征
+    dataset:图像数据库
+    num_close:最近个数
+    return:最相似的几个图像
+    '''
+    features = np.ones((dataset.shape[0], len(feature)), 'float32')
+    features = features * feature
+    dist = np.sum((features - dataset)**2, 1)
+    dist_index = np.argsort(dist)
+    return dist_index[:num_close]
+
+
+def retrieval_global(img_path):
+    '''
+    检索图像，找出最像的几个
+    img:待检索的图像
+    img_dataset:图像数据库 matrix
+    num_close:显示最近邻的图像数目
+    centures:聚类中心
+    img_paths:图像数据库所有图像路径
+    '''
+    filename = "allfeature.npy"
+    response, centers, img_dataset, all_class, addr_list = np.load(filename)
+    num_close = 6
+    img = cv2.imread(img_path)
+    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # kp, des = sift_det.detectAndCompute(img, None)
+    orb = cv2.ORB_create()
+
+    kp, des = orb.detectAndCompute(img, None)
+    feature = des2feature(des=des, centures=centers, num_words=num_words)
+    nbrs = NearestNeighbors(n_neighbors=num_close,
+                            algorithm='kd_tree').fit(img_dataset)
+    distances, indices = nbrs.kneighbors(feature)
+    # sorted_index = getNearestImg_global(feature, img_dataset, num_close)
+    print(indices)
+    showImg(img_path, indices)
 
 
 allname = [
     "car", "dog", "cat", "gun", "apple", "banana", "watermelon", "nike_logo",
-    "piano", "google_logo", "flower", "airplane"
+    "piano", "google_logo", "flower", "airplane", "beach", "dragon", "bus",
+    "beach"
 ]
-num_words = 32  # 聚类中心数
+num_words = 16  # 聚类中心数
 
 sift_det = cv2.xfeatures2d.SIFT_create()
 training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
@@ -256,9 +320,10 @@ training_names = os.listdir(training_path)
 #                                 num_words=num_words,
 #                                 response=response)
 
-path = '/home/gjx/visual-struct/dataset/train/google_logo/google_logo0.jpg'
+path = '/home/gjx/visual-struct/dataset/verify/car/car2.jpg'
 
 retrieval_img(path, training_path)
+retrieval_global(path)
 # retrieval_img('/home/gjx/visual-struct/dataset/verify/airplane/airplane20.jpg',
 #               training_path)
 # retrieval_img('/home/gjx/visual-struct/dataset/train/banana/banana11.jpg',
