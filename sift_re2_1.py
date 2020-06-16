@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA  #加载PCA算法包
 from sklearn.datasets import load_iris
 from sklearn.neighbors import NearestNeighbors
+import argparse
 
 
 def getClusterCentures(img_paths, dataset_matrix, num_words):
@@ -32,20 +33,12 @@ def getClusterCentures(img_paths, dataset_matrix, num_words):
         # gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         count = 0
         for path in file_paths:
-            # print(path)
             img = cv2.imread(img_paths + allname[i] + "/" + path)
-            # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            # kp, des = sift_det.detectAndCompute(img, None)
-            # Initiate STAR detector
-            orb = cv2.ORB_create()
-
-            # find the keypoints with ORB
-            # kp = orb.detect(img, None)
-
-            # compute the descriptors with ORB
-            kp, des = orb.detectAndCompute(img, None)
-            # print(des.shape)
-            # des = calcSiftFeature(img)
+            if feature_method == "orb":
+                kp, des = orb.detectAndCompute(img, None)
+            elif feature_method == "sift":
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                kp, des = sift_det.detectAndCompute(img, None)
             if des.any() != None:
                 des_matrix = np.row_stack((des_matrix, des))
             des_list.append(des)
@@ -129,10 +122,10 @@ def get_all_features(des_list, num_words, response):
                                     des=des_list[i],
                                     num_words=num_words)
 
-    svm = cv2.ml.SVM_create()
-    svm.train(np.array(allvec), cv2.ml.ROW_SAMPLE,
-              np.array(response))  #None, None, None)  # select best params
-    svm.save("svmnew.clf")
+    # svm = cv2.ml.SVM_create()
+    # svm.train(np.array(allvec), cv2.ml.ROW_SAMPLE,
+    #           np.array(response))  #None, None, None)  # select best params
+    # svm.save("svmnew.clf")
 
     filename = "allfeature.npy"
     np.save(filename, (response, centers, allvec, all_class, addr_list))
@@ -225,19 +218,16 @@ def retrieval_img(img_path, img_paths):
     response, centers, img_dataset, all_class, addr_list = np.load(filename)
     num_close = 6
     img = cv2.imread(img_path)
-    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # kp, des = sift_det.detectAndCompute(img, None)
-    orb = cv2.ORB_create()
-
-    kp, des = orb.detectAndCompute(img, None)
+    if feature_method == "orb":
+        kp, des = orb.detectAndCompute(img, None)
+    elif feature_method == "sift":
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        kp, des = sift_det.detectAndCompute(img, None)
 
     feature = des2feature(des=des, centures=centers, num_words=num_words)
 
     case = np.float32(feature)
     np.array(case, np.float32)
-    svm = cv2.ml.SVM_load("svmnew.clf")
-    res = svm.predict(case)
-    print(res[1][0][0])
     from sklearn.svm import SVC
     classifier = SVC(C=16)
 
@@ -288,11 +278,12 @@ def retrieval_global(img_path):
     response, centers, img_dataset, all_class, addr_list = np.load(filename)
     num_close = 6
     img = cv2.imread(img_path)
-    # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # kp, des = sift_det.detectAndCompute(img, None)
-    orb = cv2.ORB_create()
 
-    kp, des = orb.detectAndCompute(img, None)
+    if feature_method == "orb":
+        kp, des = orb.detectAndCompute(img, None)
+    elif feature_method == "sift":
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        kp, des = sift_det.detectAndCompute(img, None)
     feature = des2feature(des=des, centures=centers, num_words=num_words)
     nbrs = NearestNeighbors(n_neighbors=num_close,
                             algorithm='kd_tree').fit(img_dataset)
@@ -302,13 +293,27 @@ def retrieval_global(img_path):
     showImg(img_path, indices)
 
 
+ap = argparse.ArgumentParser()
+ap.add_argument("-feature_method",
+                required=True,
+                help="Method how to extract feature")
+ap.add_argument("-retrieval_method",
+                required=True,
+                help="Method how to search images")
+ap.add_argument("-image_path",
+                required=False,
+                help="Path of image to retrieval")
+args = vars(ap.parse_args())
 allname = [
     "car", "dog", "cat", "gun", "apple", "banana", "watermelon", "nike_logo",
     "piano", "google_logo", "flower", "airplane", "beach", "dragon", "bus",
     "beach"
 ]
+feature_method = args["feature_method"]
+retrieval_method = args["retrieval_method"]
 num_words = 16  # 聚类中心数
 
+orb = cv2.ORB_create()
 sift_det = cv2.xfeatures2d.SIFT_create()
 training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
 training_names = os.listdir(training_path)
@@ -319,11 +324,15 @@ training_names = os.listdir(training_path)
 # img_features = get_all_features(des_list=des_list,
 #                                 num_words=num_words,
 #                                 response=response)
+if args["image_path"] != None:
+    path = args["image_path"]
+else:
+    path = '/home/gjx/visual-struct/dataset/verify/car/car2.jpg'
 
-path = '/home/gjx/visual-struct/dataset/verify/car/car2.jpg'
-
-retrieval_img(path, training_path)
-retrieval_global(path)
+if retrieval_method == "svm":
+    retrieval_img(path, training_path)
+elif retrieval_method == "kd_tree":
+    retrieval_global(path)
 # retrieval_img('/home/gjx/visual-struct/dataset/verify/airplane/airplane20.jpg',
 #               training_path)
 # retrieval_img('/home/gjx/visual-struct/dataset/train/banana/banana11.jpg',
