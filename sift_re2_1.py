@@ -13,6 +13,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.datasets import make_classification
 from sklearn.tree import DecisionTreeClassifier  # Import Decision Tree Classifier
 from sklearn import metrics  #Import scikit-learn metrics module for accuracy calculation
+from sklearn.datasets.samples_generator import make_classification
 
 
 def getImageInput(img_paths, train_file, allname=None):
@@ -244,7 +245,7 @@ def retrieval(img_path, img_paths, filename):
         from sklearn.svm import SVC
         classifier = SVC(C=20)
 
-        classifier.fit(np.array(img_dataset), np.array(response))
+        classifier.fit(np.array(img_dataset), response.ravel())
         y_pred = classifier.predict(case)
         print(classifier.score(img_dataset, response))
         from sklearn.metrics import classification_report
@@ -254,14 +255,14 @@ def retrieval(img_path, img_paths, filename):
         model_rf = RandomForestClassifier(n_estimators=len(all_class),
                                           max_depth=20,
                                           random_state=1234)  # 1234随机初始化的种子
-        model_rf.fit(np.array(img_dataset), np.array(response))  # 训练数据集
+        model_rf.fit(np.array(img_dataset), response.ravel())  # 训练数据集
         y_pred = model_rf.predict(case)
         print(allname[y_pred[0]])
         result_index = y_pred[0]
     elif retrieval_method == "decision_tree":
         clf = DecisionTreeClassifier(criterion="entropy", max_depth=10)
         # Train Decision Tree Classifer
-        clf = clf.fit(np.array(img_dataset), np.array(response))
+        clf = clf.fit(img_dataset, response.ravel())
         y_pred = clf.predict(case)
         print(allname[y_pred[0]])
         result_index = y_pred[0]
@@ -317,7 +318,7 @@ def retrieval_global(img_path, filename):
                             algorithm='kd_tree').fit(img_dataset)
     distances, indices = nbrs.kneighbors(feature)
     # sorted_index = getNearestImg_global(feature, img_dataset, num_close)
-    print(indices)
+    # print(indices)
     showImg(img_path, indices, filename)
 
 
@@ -359,6 +360,16 @@ def verify(test_path, filename, num_words):
     print(classification_report(response_test, y_pred))
     print("Accuracy:", metrics.accuracy_score(response_test, y_pred))
     return img_features
+
+
+def diminish(features):
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=8)
+    pca.fit(features)
+    print(pca.explained_variance_ratio_)
+    print(pca.explained_variance_)
+    features_new = pca.transform(features)
+    return features_new
 
 
 ap = argparse.ArgumentParser()
@@ -403,7 +414,7 @@ if args["train"] != None:
 if args["image_path"] != None:
     path = args["image_path"]
 else:
-    path = '/home/gjx/visual-struct/dataset/verify/pills/53_5381.jpg'
+    path = '/home/gjx/visual-struct/dataset/verify/dragon/489.jpg'
 
 if retrieval_method == "svm":
     retrieval(path, training_path, train_name)
@@ -418,3 +429,23 @@ else:
 
 if args["verify"] != None:
     verify(verify_path, train_name, num_words)
+'''
+names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
+         "Decision Tree", "Random Forest", "Neural Net", "AdaBoost",
+         "Naive Bayes", "QDA"]
+
+classifiers = [
+    KNeighborsClassifier(3),
+    SVC(kernel="linear", C=0.025),
+    SVC(gamma=2, C=1),
+    GaussianProcessClassifier(1.0 * RBF(1.0)),
+    DecisionTreeClassifier(max_depth=5),
+    RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+    MLPClassifier(alpha=1, max_iter=1000),
+    AdaBoostClassifier(),
+    GaussianNB(),
+    QuadraticDiscriminantAnalysis()]
+
+X, y = make_classification(n_features=2, n_redundant=0, n_informative=2,
+                           random_state=1, n_clusters_per_class=1)
+'''
