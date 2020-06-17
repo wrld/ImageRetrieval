@@ -9,6 +9,8 @@ from sklearn.decomposition import PCA  #加载PCA算法包
 from sklearn.datasets import load_iris
 from sklearn.neighbors import NearestNeighbors
 import argparse
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import make_classification
 
 
 def getImageInput(img_paths, train_file, allname=None):
@@ -22,7 +24,12 @@ def getImageInput(img_paths, train_file, allname=None):
     all_class = []
     des_list = []  # 特征描述
     addr_list = []
-    des_matrix = np.zeros((1, 32))
+    if feature_method == "orb":
+        des_matrix = np.zeros((1, 32))
+    elif feature_method == "sift":
+        des_matrix = np.zeros((1, 128))
+    else:
+        raise ValueError('Error input')
     response = np.float32([])
     sumcount = 0
     if allname == None:
@@ -67,9 +74,12 @@ def getImageInput(img_paths, train_file, allname=None):
 
 def getClusters(des_matrix, num_words, train_file):
     response, all_class, addr_list = np.load(train_file)
-    kmeans = KMeans(n_clusters=num_words, random_state=33)
-    kmeans.fit(des_matrix)
-    centers = kmeans.cluster_centers_  # 视觉聚类中心
+    # kmeans = KMeans(n_clusters=num_words, random_state=33)
+    # kmeans.fit(des_matrix)
+    # centers = kmeans.cluster_centers_  # 视觉聚类中心
+    kmeans = KMeans(n_clusters=num_words, n_jobs=4,
+                    random_state=None).fit(des_matrix)
+    centers = kmeans.cluster_centers_
     np.save(train_file, (response, centers, all_class, addr_list))
     print("Complete kmeans")
 
@@ -84,7 +94,12 @@ def des2feature(des, num_words, centures):
     '''
     img_feature_vec = np.zeros((1, num_words), 'float32')
     for i in range(des.shape[0]):
-        feature_k_rows = np.ones((num_words, 32), 'float32')
+        if feature_method == "orb":
+            feature_k_rows = np.ones((num_words, 32), 'float32')
+        elif feature_method == "sift":
+            feature_k_rows = np.ones((num_words, 128), 'float32')
+        else:
+            raise ValueError('Error input')
         # print(feature_k_rows.shape)
         feature = des[i]
         # print("1")
@@ -102,10 +117,11 @@ def des2feature(des, num_words, centures):
     return img_feature_vec
 
 
-def get_all_features(des_list, num_words, filename, train_centers=None):
+def get_all_features(des_list, num_words, filename,
+                     train_centers=np.array([])):
     # 获取所有图片的特征向量
 
-    if train_centers.any() != None:
+    if train_centers.any():
         centers = train_centers
         response, all_class, addr_list = np.load(filename)
     else:
@@ -199,7 +215,7 @@ def showImg_kmeans(target_img_path, index, class_index, filename):
     plt.show()
 
 
-def retrieval_img(img_path, img_paths, filename):
+def retrieval_svm(img_path, img_paths, filename):
     '''
     检索图像，找出最像的几个
     img:待检索的图像
@@ -224,7 +240,7 @@ def retrieval_img(img_path, img_paths, filename):
     case = np.float32(feature)
     np.array(case, np.float32)
     from sklearn.svm import SVC
-    classifier = SVC(C=16)
+    classifier = SVC(C=20)
 
     classifier.fit(np.array(img_dataset), np.array(response))
     y_pred = classifier.predict(case)
@@ -243,8 +259,40 @@ def retrieval_img(img_path, img_paths, filename):
     showImg_kmeans(img_path, sorted_index, result_index, filename)
 
 
-    # showImg(img_path, num_close, img_paths + allname[int(res[1][0][0])] + "/",
-    #         allname[int(res[1][0][0])])
+def retrieval_rf(img_path, img_paths, filename):
+    response, centers, img_dataset, all_class, addr_list = np.load(filename)
+    num_close = 6
+    img = cv2.imread(img_path)
+    if feature_method == "orb":
+        kp, des = orb.detectAndCompute(img, None)
+    elif feature_method == "sift":
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        kp, des = sift_det.detectAndCompute(img, None)
+    else:
+        raise ValueError('Error input')
+    feature = des2feature(des=des, centures=centers, num_words=num_words)
+
+    case = np.float32(feature)
+    np.array(case, np.float32)
+    model_rf = RandomForestClassifier(n_estimators=len(all_class),
+                                      max_depth=3,
+                                      random_state=1234)  # 1234随机初始化的种子
+
+    model_rf.fit(np.array(img_dataset), np.array(response))  # 训练数据集
+    y_pred = model_rf.predict(case)
+    print(allname[y_pred[0]])
+    result_index = y_pred[0]
+    if result_index > 0:
+        sorted_index = getNearestImg(
+            feature,
+            img_dataset[all_class[result_index - 1]:all_class[result_index]],
+            num_close)
+    else:
+        sorted_index = getNearestImg(feature, img_dataset[0:all_class[0]],
+                                     num_close)
+    showImg_kmeans(img_path, sorted_index, result_index, filename)
+
+
 def getNearestImg_global(feature, dataset, num_close):
     '''
     找出目标图像最像的几个
@@ -289,10 +337,10 @@ def retrieval_global(img_path, filename):
     showImg(img_path, indices, filename)
 
 
-def verify(test_path, filename):
+def verify(test_path, filename, num_words):
     response, centers, img_dataset, all_class, addr_list = np.load(filename)
     from sklearn.svm import SVC
-    classifier = SVC(C=16)
+    classifier = SVC(C=20)
     classifier.fit(np.array(img_dataset), np.array(response))
 
     des_matrix, des_list = getImageInput(img_paths=test_path,
@@ -303,7 +351,7 @@ def verify(test_path, filename):
     #             num_words=num_words,
     #             train_file="test.npy")
     img_features = get_all_features(des_list=des_list,
-                                    num_words=16,
+                                    num_words=num_words,
                                     filename="test.npy",
                                     train_centers=centers)
 
@@ -325,44 +373,49 @@ ap.add_argument("-image_path",
                 required=False,
                 help="Path of image to retrieval")
 ap.add_argument("-verify", required=False, help="if verify")
+ap.add_argument("-train", required=False, help="if train")
 args = vars(ap.parse_args())
 
 feature_method = args["feature_method"]
 retrieval_method = args["retrieval_method"]
-num_words = 16  # 聚类中心数
 
 orb = cv2.ORB_create()
 sift_det = cv2.xfeatures2d.SIFT_create()
 training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
 verify_path = '/home/gjx/visual-struct/dataset/verify/'
 allname = [
-    'airplane', 'beach', 'apple', 'banana', 'nike_logo', 'car', 'horse', 'gun',
-    'dragon', 'dog', 'flower', 'bus', 'google_logo', 'piano', 'watermelon',
-    'cat'
+    'airplane', 'elephant', 'face', 'pills', 'car', 'horse', 'gun', 'dragon',
+    'dog', 'women', 'bus', 'google_logo', 'poke', 'cat', 'accordion', 'brain'
 ]
+num_words = len(allname)  # 聚类中心数
+if args["train"] != None:
+    des_matrix, des_list = getImageInput(img_paths=training_path,
+                                         train_file="train.npy",
+                                         allname=allname)
 
-# des_matrix, des_list = getImageInput(img_paths=training_path,
-#                                      train_file="train.npy",
-#                                      allname=allname)
+    getClusters(des_matrix=des_matrix,
+                num_words=num_words,
+                train_file="train.npy")
 
-# getClusters(des_matrix=des_matrix, num_words=num_words, train_file="train.npy")
-
-# img_features = get_all_features(des_list=des_list,
-#                                 num_words=num_words,
-#                                 filename="train.npy")
+    img_features = get_all_features(des_list=des_list,
+                                    num_words=num_words,
+                                    filename="train.npy")
 if args["image_path"] != None:
     path = args["image_path"]
 else:
-    path = '/home/gjx/visual-struct/dataset/verify/bus/302.jpg'
+    path = '/home/gjx/visual-struct/dataset/verify/airplane/image_0390.jpg'
 
 if retrieval_method == "svm":
-    retrieval_img(path, training_path, "train.npy")
+    retrieval_svm(path, training_path, "train.npy")
 elif retrieval_method == "kd_tree":
     retrieval_global(path, "train.npy")
+elif retrieval_method == "random_forest":
+    retrieval_rf(path, training_path, "train.npy")
 else:
     raise ValueError('Error input')
-if args["verify"] == 1:
-    verify(verify_path, "train.npy")
+
+if args["verify"] != None:
+    verify(verify_path, "train.npy", num_words)
 # retrieval_img('/home/gjx/visual-struct/dataset/verify/airplane/airplane20.jpg',
 #               training_path)
 # retrieval_img('/home/gjx/visual-struct/dataset/train/banana/banana11.jpg',
