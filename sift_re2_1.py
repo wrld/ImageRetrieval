@@ -210,8 +210,8 @@ def showImg_kmeans(target_img_path, index, class_index, filename):
         for i in index:
             paths.append(addr_list[i])
     plt.figure(figsize=(10, 20))  #  figsize 用来设置图片大小
-    plt.subplot(432), plt.imshow(
-        plt.imread(target_img_path)), plt.title('target_image')
+    plt.subplot(432), plt.imshow(plt.imread(target_img_path)), plt.title(
+        allname[class_index])
 
     for i in range(len(index)):
         plt.subplot(4, 3, i + 4), plt.imshow(plt.imread(paths[i]))
@@ -372,80 +372,82 @@ def diminish(features):
     return features_new
 
 
-ap = argparse.ArgumentParser()
-ap.add_argument("-feature_method",
-                required=True,
-                help="Method how to extract feature")
-ap.add_argument("-retrieval_method",
-                required=True,
-                help="Method how to search images")
-ap.add_argument("-image_path",
-                required=False,
-                help="Path of image to retrieval")
-ap.add_argument("-verify", required=False, help="if verify")
-ap.add_argument("-train", required=False, help="if train")
-args = vars(ap.parse_args())
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-feature_method",
+                    required=True,
+                    help="Method how to extract feature")
+    ap.add_argument("-retrieval_method",
+                    required=True,
+                    help="Method how to search images")
+    ap.add_argument("-image_path",
+                    required=False,
+                    help="Path of image to retrieval")
+    ap.add_argument("-verify", required=False, help="if verify")
+    ap.add_argument("-train", required=False, help="if train")
+    args = vars(ap.parse_args())
 
-feature_method = args["feature_method"]
-retrieval_method = args["retrieval_method"]
+    feature_method = args["feature_method"]
+    retrieval_method = args["retrieval_method"]
 
-orb = cv2.ORB_create()
-sift_det = cv2.xfeatures2d.SIFT_create()
-training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
-verify_path = '/home/gjx/visual-struct/dataset/verify/'
-allname = [
-    'airplane', 'elephant', 'face', 'pills', 'car', 'horse', 'gun', 'dragon',
-    'dog', 'women', 'bus', 'google_logo', 'poke', 'cat', 'accordion', 'brain'
-]
-num_words = 50  # 聚类中心数
-train_name = "train_sift_50.npy"
-if args["train"] != None:
-    des_matrix, des_list = getImageInput(img_paths=training_path,
-                                         train_file=train_name,
-                                         allname=allname)
+    orb = cv2.ORB_create()
+    sift_det = cv2.xfeatures2d.SIFT_create()
+    training_path = '/home/gjx/visual-struct/dataset/train/'  #训练样本文件夹路径
+    verify_path = '/home/gjx/visual-struct/dataset/verify/'
+    allname = [
+        'airplane', 'elephant', 'face', 'pills', 'car', 'horse', 'gun',
+        'dragon', 'dog', 'women', 'bus', 'google_logo', 'poke', 'cat',
+        'accordion', 'brain'
+    ]
+    num_words = 50  # 聚类中心数
+    train_name = "train_sift_50.npy"
+    if args["train"] != None:
+        des_matrix, des_list = getImageInput(img_paths=training_path,
+                                             train_file=train_name,
+                                             allname=allname)
 
-    getClusters(des_matrix=des_matrix,
-                num_words=num_words,
-                train_file=train_name)
+        getClusters(des_matrix=des_matrix,
+                    num_words=num_words,
+                    train_file=train_name)
 
-    img_features = get_all_features(des_list=des_list,
-                                    num_words=num_words,
-                                    filename=train_name)
-if args["image_path"] != None:
-    path = args["image_path"]
-else:
-    path = '/home/gjx/visual-struct/dataset/verify/dragon/489.jpg'
+        img_features = get_all_features(des_list=des_list,
+                                        num_words=num_words,
+                                        filename=train_name)
+    if args["image_path"] != None:
+        path = args["image_path"]
+    else:
+        path = '/home/gjx/visual-struct/dataset/verify/dragon/489.jpg'
 
-if retrieval_method == "svm":
-    retrieval(path, training_path, train_name)
-elif retrieval_method == "kd_tree":
-    retrieval_global(path, train_name)
-elif retrieval_method == "random_forest":
-    retrieval(path, training_path, train_name)
-elif retrieval_method == "decision_tree":
-    retrieval(path, training_path, train_name)
-else:
-    raise ValueError('Error input')
+    if retrieval_method == "svm":
+        retrieval(path, training_path, train_name)
+    elif retrieval_method == "kd_tree":
+        retrieval_global(path, train_name)
+    elif retrieval_method == "random_forest":
+        retrieval(path, training_path, train_name)
+    elif retrieval_method == "decision_tree":
+        retrieval(path, training_path, train_name)
+    else:
+        raise ValueError('Error input')
 
-if args["verify"] != None:
-    verify(verify_path, train_name, num_words)
-'''
-names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
-         "Decision Tree", "Random Forest", "Neural Net", "AdaBoost",
-         "Naive Bayes", "QDA"]
+    if args["verify"] != None:
+        verify(verify_path, train_name, num_words)
+    '''
+    names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
+            "Decision Tree", "Random Forest", "Neural Net", "AdaBoost",
+            "Naive Bayes", "QDA"]
 
-classifiers = [
-    KNeighborsClassifier(3),
-    SVC(kernel="linear", C=0.025),
-    SVC(gamma=2, C=1),
-    GaussianProcessClassifier(1.0 * RBF(1.0)),
-    DecisionTreeClassifier(max_depth=5),
-    RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
-    MLPClassifier(alpha=1, max_iter=1000),
-    AdaBoostClassifier(),
-    GaussianNB(),
-    QuadraticDiscriminantAnalysis()]
+    classifiers = [
+        KNeighborsClassifier(3),
+        SVC(kernel="linear", C=0.025),
+        SVC(gamma=2, C=1),
+        GaussianProcessClassifier(1.0 * RBF(1.0)),
+        DecisionTreeClassifier(max_depth=5),
+        RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+        MLPClassifier(alpha=1, max_iter=1000),
+        AdaBoostClassifier(),
+        GaussianNB(),
+        QuadraticDiscriminantAnalysis()]
 
-X, y = make_classification(n_features=2, n_redundant=0, n_informative=2,
-                           random_state=1, n_clusters_per_class=1)
-'''
+    X, y = make_classification(n_features=2, n_redundant=0, n_informative=2,
+                            random_state=1, n_clusters_per_class=1)
+    '''
