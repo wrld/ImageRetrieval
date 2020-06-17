@@ -252,7 +252,7 @@ def retrieval(img_path, img_paths, filename):
         result_index = y_pred[0]
     elif retrieval_method == "random_forest":
         model_rf = RandomForestClassifier(n_estimators=len(all_class),
-                                          max_depth=10,
+                                          max_depth=20,
                                           random_state=1234)  # 1234随机初始化的种子
         model_rf.fit(np.array(img_dataset), np.array(response))  # 训练数据集
         y_pred = model_rf.predict(case)
@@ -345,13 +345,13 @@ def verify(test_path, filename, num_words):
 
     elif retrieval_method == "random_forest":
         model_rf = RandomForestClassifier(n_estimators=len(all_class),
-                                          max_depth=10,
+                                          max_depth=20,
                                           random_state=1234)  # 1234随机初始化的种子
         model_rf.fit(np.array(img_dataset), np.array(response_train))  # 训练数据集
         y_pred = model_rf.predict(img_features)
 
     elif retrieval_method == "decision_tree":
-        clf = DecisionTreeClassifier(max_depth=10)
+        clf = DecisionTreeClassifier(criterion="entropy", max_depth=35)
         clf = clf.fit(np.array(img_dataset), np.array(response_train))
         y_pred = clf.predict(img_features)
 
@@ -386,34 +386,35 @@ allname = [
     'airplane', 'elephant', 'face', 'pills', 'car', 'horse', 'gun', 'dragon',
     'dog', 'women', 'bus', 'google_logo', 'poke', 'cat', 'accordion', 'brain'
 ]
-num_words = len(allname)  # 聚类中心数
+num_words = 50  # 聚类中心数
+train_name = "train_sift_50.npy"
 if args["train"] != None:
     des_matrix, des_list = getImageInput(img_paths=training_path,
-                                         train_file="train.npy",
+                                         train_file=train_name,
                                          allname=allname)
 
     getClusters(des_matrix=des_matrix,
                 num_words=num_words,
-                train_file="train.npy")
+                train_file=train_name)
 
     img_features = get_all_features(des_list=des_list,
                                     num_words=num_words,
-                                    filename="train.npy")
+                                    filename=train_name)
 if args["image_path"] != None:
     path = args["image_path"]
 else:
     path = '/home/gjx/visual-struct/dataset/verify/pills/53_5381.jpg'
 
 if retrieval_method == "svm":
-    retrieval(path, training_path, "train.npy")
+    retrieval(path, training_path, train_name)
 elif retrieval_method == "kd_tree":
-    retrieval_global(path, "train.npy")
+    retrieval_global(path, train_name)
 elif retrieval_method == "random_forest":
-    retrieval(path, training_path, "train.npy")
+    retrieval(path, training_path, train_name)
 elif retrieval_method == "decision_tree":
-    retrieval(path, training_path, "train.npy")
+    retrieval(path, training_path, train_name)
 else:
     raise ValueError('Error input')
 
 if args["verify"] != None:
-    verify(verify_path, "train.npy", num_words)
+    verify(verify_path, train_name, num_words)
