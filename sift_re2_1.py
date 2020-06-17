@@ -11,6 +11,8 @@ from sklearn.neighbors import NearestNeighbors
 import argparse
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.datasets import make_classification
+from sklearn.tree import DecisionTreeClassifier  # Import Decision Tree Classifier
+from sklearn import metrics  #Import scikit-learn metrics module for accuracy calculation
 
 
 def getImageInput(img_paths, train_file, allname=None):
@@ -215,7 +217,7 @@ def showImg_kmeans(target_img_path, index, class_index, filename):
     plt.show()
 
 
-def retrieval_svm(img_path, img_paths, filename):
+def retrieval(img_path, img_paths, filename):
     '''
     检索图像，找出最像的几个
     img:待检索的图像
@@ -236,52 +238,34 @@ def retrieval_svm(img_path, img_paths, filename):
     else:
         raise ValueError('Error input')
     feature = des2feature(des=des, centures=centers, num_words=num_words)
-
     case = np.float32(feature)
     np.array(case, np.float32)
-    from sklearn.svm import SVC
-    classifier = SVC(C=20)
+    if retrieval_method == "svm":
+        from sklearn.svm import SVC
+        classifier = SVC(C=20)
 
-    classifier.fit(np.array(img_dataset), np.array(response))
-    y_pred = classifier.predict(case)
-    print(classifier.score(img_dataset, response))
-    from sklearn.metrics import classification_report
-    print(allname[y_pred[0]])
-    result_index = y_pred[0]
-    if result_index > 0:
-        sorted_index = getNearestImg(
-            feature,
-            img_dataset[all_class[result_index - 1]:all_class[result_index]],
-            num_close)
-    else:
-        sorted_index = getNearestImg(feature, img_dataset[0:all_class[0]],
-                                     num_close)
-    showImg_kmeans(img_path, sorted_index, result_index, filename)
+        classifier.fit(np.array(img_dataset), np.array(response))
+        y_pred = classifier.predict(case)
+        print(classifier.score(img_dataset, response))
+        from sklearn.metrics import classification_report
+        print(allname[y_pred[0]])
+        result_index = y_pred[0]
+    elif retrieval_method == "random_forest":
+        model_rf = RandomForestClassifier(n_estimators=len(all_class),
+                                          max_depth=10,
+                                          random_state=1234)  # 1234随机初始化的种子
+        model_rf.fit(np.array(img_dataset), np.array(response))  # 训练数据集
+        y_pred = model_rf.predict(case)
+        print(allname[y_pred[0]])
+        result_index = y_pred[0]
+    elif retrieval_method == "decision_tree":
+        clf = DecisionTreeClassifier(criterion="entropy", max_depth=10)
+        # Train Decision Tree Classifer
+        clf = clf.fit(np.array(img_dataset), np.array(response))
+        y_pred = clf.predict(case)
+        print(allname[y_pred[0]])
+        result_index = y_pred[0]
 
-
-def retrieval_rf(img_path, img_paths, filename):
-    response, centers, img_dataset, all_class, addr_list = np.load(filename)
-    num_close = 6
-    img = cv2.imread(img_path)
-    if feature_method == "orb":
-        kp, des = orb.detectAndCompute(img, None)
-    elif feature_method == "sift":
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        kp, des = sift_det.detectAndCompute(img, None)
-    else:
-        raise ValueError('Error input')
-    feature = des2feature(des=des, centures=centers, num_words=num_words)
-
-    case = np.float32(feature)
-    np.array(case, np.float32)
-    model_rf = RandomForestClassifier(n_estimators=len(all_class),
-                                      max_depth=3,
-                                      random_state=1234)  # 1234随机初始化的种子
-
-    model_rf.fit(np.array(img_dataset), np.array(response))  # 训练数据集
-    y_pred = model_rf.predict(case)
-    print(allname[y_pred[0]])
-    result_index = y_pred[0]
     if result_index > 0:
         sorted_index = getNearestImg(
             feature,
@@ -338,15 +322,12 @@ def retrieval_global(img_path, filename):
 
 
 def verify(test_path, filename, num_words):
-    response, centers, img_dataset, all_class, addr_list = np.load(filename)
-    from sklearn.svm import SVC
-    classifier = SVC(C=20)
-    classifier.fit(np.array(img_dataset), np.array(response))
-
+    response_train, centers, img_dataset, all_class, addr_list = np.load(
+        filename)
     des_matrix, des_list = getImageInput(img_paths=test_path,
                                          train_file="test.npy",
                                          allname=allname)
-    response, all_class, addr_list = np.load("test.npy")
+    response_test, all_class, addr_list = np.load("test.npy")
     # getClusters(des_matrix=des_matrix,
     #             num_words=num_words,
     #             train_file="test.npy")
@@ -354,11 +335,29 @@ def verify(test_path, filename, num_words):
                                     num_words=num_words,
                                     filename="test.npy",
                                     train_centers=centers)
+    if retrieval_method == "svm":
+        from sklearn.svm import SVC
+        classifier = SVC(C=20)
+        classifier.fit(np.array(img_dataset), np.array(response_train))
 
-    y_pred = classifier.predict(img_features)
-    print(classifier.score(img_features, response))
+        y_pred = classifier.predict(img_features)
+        print(classifier.score(img_features, response_test))
+
+    elif retrieval_method == "random_forest":
+        model_rf = RandomForestClassifier(n_estimators=len(all_class),
+                                          max_depth=10,
+                                          random_state=1234)  # 1234随机初始化的种子
+        model_rf.fit(np.array(img_dataset), np.array(response_train))  # 训练数据集
+        y_pred = model_rf.predict(img_features)
+
+    elif retrieval_method == "decision_tree":
+        clf = DecisionTreeClassifier(max_depth=10)
+        clf = clf.fit(np.array(img_dataset), np.array(response_train))
+        y_pred = clf.predict(img_features)
+
     from sklearn.metrics import classification_report
-    print(classification_report(response, y_pred))
+    print(classification_report(response_test, y_pred))
+    print("Accuracy:", metrics.accuracy_score(response_test, y_pred))
     return img_features
 
 
@@ -403,26 +402,18 @@ if args["train"] != None:
 if args["image_path"] != None:
     path = args["image_path"]
 else:
-    path = '/home/gjx/visual-struct/dataset/verify/airplane/image_0390.jpg'
+    path = '/home/gjx/visual-struct/dataset/verify/pills/53_5381.jpg'
 
 if retrieval_method == "svm":
-    retrieval_svm(path, training_path, "train.npy")
+    retrieval(path, training_path, "train.npy")
 elif retrieval_method == "kd_tree":
     retrieval_global(path, "train.npy")
 elif retrieval_method == "random_forest":
-    retrieval_rf(path, training_path, "train.npy")
+    retrieval(path, training_path, "train.npy")
+elif retrieval_method == "decision_tree":
+    retrieval(path, training_path, "train.npy")
 else:
     raise ValueError('Error input')
 
 if args["verify"] != None:
     verify(verify_path, "train.npy", num_words)
-# retrieval_img('/home/gjx/visual-struct/dataset/verify/airplane/airplane20.jpg',
-#               training_path)
-# retrieval_img('/home/gjx/visual-struct/dataset/train/banana/banana11.jpg',
-#               training_path)
-# retrieval_img('/home/gjx/visual-struct/dataset/verify/airplane/airplane14.jpg',
-#               training_path)
-# pic = plt.imread(path)
-# plt.figure(figsize=(10, 20))
-# plt.imshow(pic)
-# plt.show()
