@@ -29,5 +29,7 @@ python retrieval.py -feature_method sift -retrieval_method svm
 #检索算法：svm random_forest decision_tree
 ```
 
-
-
+## 运行示例
+![img](./example1.png)
+![img](./example2.png)
+![img](./example3.png)
